@@ -8,8 +8,10 @@ import ioio.lib.api.PwmOutput;
 import ioio.lib.api.exception.ConnectionLostException;
 import ioio.lib.util.IOIOLooper;
 import android.os.SystemClock;
+import android.util.Log;
 
 class VicsWagonIOIOLooper implements IOIOLooper {
+	private final static String LOGTAG = "IOIOLooper";
     private PwmOutput rightMotorClock;
     private PwmOutput leftMotorClock;
     private int pulseWidth = 10;// microseconds
@@ -86,10 +88,10 @@ class VicsWagonIOIOLooper implements IOIOLooper {
             rightMotorClock = ioio.openPwmOutput(MOTOR_CLOCK_RIGHT_PIN, rightMotorPWMfrequency);
             leftMotorClock = ioio.openPwmOutput(MOTOR_CLOCK_LEFT_PIN, leftMotorPWMfrequency);
 
-            //rightMotorClock.setPulseWidth(pulseWidth);
-            //leftMotorClock.setPulseWidth(pulseWidth);
+            rightMotorClock.setPulseWidth(pulseWidth);
+            leftMotorClock.setPulseWidth(pulseWidth);
 
-            
+            openAndMonitorFrontIRSensor();
             //sensorMonitor = new SensorMonitor(ioio, mActivity);
             //sensorMonitor.setupAllSensors(/*hasFrontIRSensor*/true, false, false, false, false);
 
@@ -100,6 +102,7 @@ class VicsWagonIOIOLooper implements IOIOLooper {
         log(mActivity.getString(R.string.ioio_connected));
     }
 
+    
     private synchronized void setFrontIRPulseDuration(float inputVal) {
         m_frontIRPulseDuration = inputVal;
     }
@@ -144,6 +147,8 @@ class VicsWagonIOIOLooper implements IOIOLooper {
         frontStrobe.write(true);
         frontStrobe.write(false);
 
+        accelerateTo(1000);
+        
         if (sensorMonitor != null) {
             sensorMonitor.readAllSensors();
             float duration = sensorMonitor.getFrontIRPulseDuration();
@@ -151,20 +156,25 @@ class VicsWagonIOIOLooper implements IOIOLooper {
         }
     }
 
-    public void accelerateTo(int finalPWMfrequency) {
-        while (leftMotorPWMfrequency < finalPWMfrequency) {
-            try {
-                rightMotorClockPulse.write(true);
-                rightMotorClockPulse.write(false);
-                leftMotorClockPulse.write(true);
-                leftMotorClockPulse.write(false);
-                SystemClock.sleep(1000 / leftMotorPWMfrequency);
-                leftMotorPWMfrequency++;
+    public void accelerateTo(final int finalPWMfrequency) {
+    	SystemClock.sleep(1000);
+    	new Thread(new Runnable() {
+    		public void run() {
+    			while (leftMotorPWMfrequency < finalPWMfrequency) {
+    				try {
+    					SystemClock.sleep(1000 / leftMotorPWMfrequency);
+    					Log.d(LOGTAG, "Setting Motor frequency : " + leftMotorPWMfrequency);
+    					rightMotorClock.setFrequency(rightMotorPWMfrequency);
+    					leftMotorClock.setFrequency(leftMotorPWMfrequency);
+    					leftMotorPWMfrequency++;
+    					rightMotorPWMfrequency++;
 
-            } catch (ConnectionLostException ex) {
-                log("Motor clock pulsing hiccup");
-            }
-        }
+    				} catch (Exception ex) {
+    					log("Motor clock pulsing hiccup");
+    				}
+    			}
+    		}
+    	}).start();
     }
 
     public void disconnected() {
